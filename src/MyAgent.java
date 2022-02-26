@@ -1,6 +1,6 @@
 import static java.lang.System.out;
-import java.util.ArrayList;
-import java.util.List;
+
+import java.util.*;
 
 import agents.ArtificialAgent;
 import game.actions.EDirection;
@@ -22,7 +22,7 @@ public class MyAgent extends ArtificialAgent {
 		long searchStartMillis = System.currentTimeMillis();
 		
 		List<EDirection> result = new ArrayList<EDirection>();
-		dfs(5, result); // the number marks how deep we will search (the longest plan we will consider)
+		search(result);
 
 		long searchTime = System.currentTimeMillis() - searchStartMillis;
         
@@ -35,49 +35,126 @@ public class MyAgent extends ArtificialAgent {
 		return result.isEmpty() ? null : result;
 	}
 
-	private boolean dfs(int level, List<EDirection> result) {
-		if (level <= 0) return false; // DEPTH-LIMITED
-		
-		++searchedNodes;
-		
-		// COLLECT POSSIBLE ACTIONS
-		
-		List<CAction> actions = new ArrayList<CAction>(4);
-		
-		for (CMove move : CMove.getActions()) {
-			if (move.isPossible(board)) {
-				actions.add(move);
+	private boolean search(List<EDirection> result) {
+		BoardCompact initialBoard = board.clone();
+		BoardCompact goalBoard = null;
+
+		PriorityQueue<Node> frontier = new PriorityQueue<>(new NodeComparator());
+		Map<BoardCompact, BoardCompact> cameFromBoard = new HashMap<>();
+		Map<BoardCompact, CAction> cameFromAction = new HashMap<>();
+		Map<BoardCompact, Integer> costSoFar = new HashMap<>();
+
+		frontier.add(new Node(initialBoard, 0));
+		cameFromBoard.put(initialBoard, null);
+		cameFromAction.put(initialBoard, null);
+		costSoFar.put(initialBoard, 0);
+
+		int statesExplored = 1;
+
+		// find the goal state
+		while (!frontier.isEmpty()) {
+			BoardCompact currentBoard = frontier.poll().boardCompact;
+
+			if (currentBoard.isVictory()) {
+				goalBoard = currentBoard.clone();
+				break;
+			}
+
+			// COLLECT POSSIBLE ACTIONS
+
+			List<CAction> actions = new ArrayList<CAction>(4);
+
+			for (CMove move : CMove.getActions()) {
+				if (move.isPossible(board)) {
+					actions.add(move);
+				}
+			}
+			for (CPush push : CPush.getActions()) {
+				if (push.isPossible(board)) {
+					actions.add(push);
+				}
+			}
+
+//			for (CAction action : actions) {
+//				// PERFORM THE ACTION
+//				result.add(action.getDirection());
+//				action.perform(board);
+//
+//				// CONTINUE THE SEARCH
+//				if (dfs(level - 1, result)) {
+//					// SOLUTION FOUND!
+//					return true;
+//				}
+//
+//				// REVERSE ACTION
+//				result.remove(result.size()-1);
+//				action.reverse(board);
+//			}
+
+			for (CAction action : actions) {
+				int actionCost = 1;
+				BoardCompact nextBoard = currentBoard.clone();
+				action.perform(nextBoard);
+
+				int newCost = costSoFar.get(currentBoard) + actionCost;
+				if (!costSoFar.containsKey(nextBoard)) statesExplored++;
+				if (!costSoFar.containsKey(nextBoard) || newCost < costSoFar.get(nextBoard)) {
+					costSoFar.put(nextBoard, newCost);
+					int priority = newCost + heuristic(nextBoard);
+					frontier.add(new Node(nextBoard, priority));
+					cameFromBoard.put(nextBoard, currentBoard);
+					cameFromAction.put(nextBoard, action);
+				}
 			}
 		}
-		for (CPush push : CPush.getActions()) {
-			if (push.isPossible(board)) {
-				actions.add(push);
-			}
+
+		System.out.println("States explored: " + statesExplored);
+
+		// find the solution
+//		List<CAction> actions = new ArrayList<>();  // series of actions from start state to goal state
+
+		BoardCompact currentBoard = goalBoard;
+		BoardCompact previousBoard = cameFromBoard.get(currentBoard);
+		CAction previousAction = cameFromAction.get(currentBoard);
+
+		while (previousAction != null && previousBoard != null) {
+//			actions.add(previousAction);
+			result.add(previousAction.getDirection());
+			currentBoard = previousBoard;
+			previousBoard = cameFromBoard.get(currentBoard);
+			previousAction = cameFromAction.get(currentBoard);
 		}
-		
-		// TRY ACTIONS
-		for (CAction action : actions) {
-			// PERFORM THE ACTION
-			result.add(action.getDirection());
-			action.perform(board);
-			
-			// CHECK VICTORY
-			if (board.isVictory()) {
-				// SOLUTION FOUND!
-				return true;
-			}
-			
-			// CONTINUE THE SEARCH
-			if (dfs(level - 1, result)) {
-				// SOLUTION FOUND!
-				return true;
-			}
-			
-			// REVERSE ACTION
-			result.remove(result.size()-1);
-			action.reverse(board);
-		}
-		
+
+		Collections.reverse(result);
+
 		return false;
+	}
+
+	private int heuristic(BoardCompact boardCompact) {
+		return 0;
+	}
+
+}
+
+class Node {
+
+	BoardCompact boardCompact;
+	Integer priority;
+
+	Node(BoardCompact boardCompact, Integer priority) {
+		this.boardCompact = boardCompact;
+		this.priority = priority;
+	}
+
+}
+
+class NodeComparator<S> implements Comparator<Node>{
+
+	public int compare(Node n1, Node n2) {
+		if (n1.priority > n2.priority)
+			return 1;
+		else if (n1.priority < n2.priority)
+			return -1;
+		return 0;
 	}
 }
