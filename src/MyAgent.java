@@ -65,31 +65,23 @@ public class MyAgent extends ArtificialAgent {
 			List<CAction> actions = new ArrayList<CAction>(4);
 
 			for (CMove move : CMove.getActions()) {
-				if (move.isPossible(board)) {
+				if (move.isPossible(currentBoard)) {
 					actions.add(move);
 				}
 			}
 			for (CPush push : CPush.getActions()) {
-				if (push.isPossible(board)) {
+				if (push.isPossible(currentBoard)) {
 					actions.add(push);
 				}
 			}
 
-//			for (CAction action : actions) {
-//				// PERFORM THE ACTION
-//				result.add(action.getDirection());
-//				action.perform(board);
+//			// PERFORM THE ACTION
+//			result.add(action.getDirection());
+//			action.perform(board);
 //
-//				// CONTINUE THE SEARCH
-//				if (dfs(level - 1, result)) {
-//					// SOLUTION FOUND!
-//					return true;
-//				}
-//
-//				// REVERSE ACTION
-//				result.remove(result.size()-1);
-//				action.reverse(board);
-//			}
+//			// REVERSE ACTION
+//			result.remove(result.size()-1);
+//			action.reverse(board);
 
 			for (CAction action : actions) {
 				int actionCost = 1;
@@ -157,4 +149,21 @@ class NodeComparator<S> implements Comparator<Node>{
 			return -1;
 		return 0;
 	}
+}
+
+class DeadSquareDetector {
+
+	public static boolean[][] detect(BoardCompact board) {
+		boolean[][] deadSquares = new boolean[board.width()][board.height()];
+
+		for (int x = 0; x < board.width(); x++) {
+			for (int y = 0; y < board.height(); y++) {
+				int countWalls = 0;
+				// TODO - IMPLEMENT CHECKING FOR CORNERS
+			}
+		}
+
+		return deadSquares;
+	}
+
 }
