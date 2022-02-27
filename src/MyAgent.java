@@ -1,20 +1,17 @@
-import static java.lang.System.out;
-
-import java.awt.*;
-import java.awt.geom.Point2D;
-import java.util.*;
-import java.util.List;
-
 import agents.ArtificialAgent;
 import game.actions.EDirection;
-import game.actions.compact.*;
+import game.actions.compact.CAction;
+import game.actions.compact.CMove;
+import game.actions.compact.CPush;
 import game.board.compact.BoardCompact;
 import game.board.compact.CTile;
 
-/**
- * The simplest Tree-DFS agent.
- * @author Jimmy
- */
+import java.awt.geom.Point2D;
+import java.util.*;
+
+import static java.lang.System.out;
+
+
 public class MyAgent extends ArtificialAgent {
 	protected BoardCompact board;
 	protected int searchedNodes;
@@ -54,6 +51,7 @@ public class MyAgent extends ArtificialAgent {
 		costSoFar.put(initialBoard, 0);
 
 		int statesExplored = 1;
+		boolean[][] deadSquares = DeadSquareDetector.detect(board);
 
 		// find the goal state
 		while (!frontier.isEmpty()) {
@@ -92,6 +90,8 @@ public class MyAgent extends ArtificialAgent {
 				BoardCompact nextBoard = currentBoard.clone();
 				action.perform(nextBoard);
 
+				if (DeadSquareDetector.deadBoxes(currentBoard, deadSquares)) continue;
+
 				int newCost = costSoFar.get(currentBoard) + actionCost;
 				if (!costSoFar.containsKey(nextBoard)) statesExplored++;
 				if (!costSoFar.containsKey(nextBoard) || newCost < costSoFar.get(nextBoard)) {
@@ -106,15 +106,11 @@ public class MyAgent extends ArtificialAgent {
 
 		System.out.println("States explored: " + statesExplored);
 
-		// find the solution
-//		List<CAction> actions = new ArrayList<>();  // series of actions from start state to goal state
-
 		BoardCompact currentBoard = goalBoard;
 		BoardCompact previousBoard = cameFromBoard.get(currentBoard);
 		CAction previousAction = cameFromAction.get(currentBoard);
 
 		while (previousAction != null && previousBoard != null) {
-//			actions.add(previousAction);
 			result.add(previousAction.getDirection());
 			currentBoard = previousBoard;
 			previousBoard = cameFromBoard.get(currentBoard);
@@ -137,16 +133,17 @@ public class MyAgent extends ArtificialAgent {
 
 		return h;
 	}
+
 	public int manhattan_dist(Point2D box , Point2D goal){
 		return  Math.abs((int)(box.getX() - goal.getX())) + Math.abs((int)(box.getY() - goal.getY()));
 	}
+
 	public double euclidean_dist(Point2D box, Point2D goal){
-		return Math.sqrt(  ((box.getX() - goal.getX()) * (box.getX() - goal.getX()))
+		return Math.sqrt(((box.getX() - goal.getX()) * (box.getX() - goal.getX()))
 				+ ((box.getY() - goal.getY()) * (box.getY() - goal.getY())));
 	}
 
 	public int heuristic_for_this_box(Point2D box_co, ArrayList<Point2D> goals){
-
 //		int boxNum = CTile.getBoxNum(board.tiles[(int)box_co.getX()][(int)box_co.getY()]);
 		int dist = Integer.MAX_VALUE;
 		Point2D min = goals.get(0);
@@ -163,7 +160,7 @@ public class MyAgent extends ArtificialAgent {
 		return dist;
 	}
 
-	public ArrayList<Point2D> boxes_location (BoardCompact boardCompact){
+	public static ArrayList<Point2D> boxes_location(BoardCompact boardCompact){
 		ArrayList<Point2D> boxes_location = new ArrayList<>();
 		for( int x = 0 ; x < boardCompact.width(); x++){
 			for (int y = 0 ; y < boardCompact.height() ; y++){
@@ -178,8 +175,7 @@ public class MyAgent extends ArtificialAgent {
 		return boxes_location;
 	}
 
-
-	public ArrayList<Point2D> goals_location (BoardCompact boardCompact){
+	public static ArrayList<Point2D> goals_location(BoardCompact boardCompact){
 		ArrayList<Point2D> goals_location = new ArrayList<>();
 		for( int x = 0 ; x < boardCompact.width(); x++){
 			for (int y = 0 ; y < boardCompact.height() ; y++){
@@ -194,12 +190,7 @@ public class MyAgent extends ArtificialAgent {
 		return goals_location;
 	}
 
-
-
-
 }
-
-
 
 
 class Node {
@@ -214,6 +205,7 @@ class Node {
 
 }
 
+
 class NodeComparator<S> implements Comparator<Node>{
 
 	public int compare(Node n1, Node n2) {
@@ -225,19 +217,40 @@ class NodeComparator<S> implements Comparator<Node>{
 	}
 }
 
+
 class DeadSquareDetector {
 
-	public static boolean[][] detect(BoardCompact board) {
-		boolean[][] deadSquares = new boolean[board.width()][board.height()];
+	public static boolean[][] detect(BoardCompact boardCompact) {
+		boolean[][] deadSquares = new boolean[boardCompact.width()][boardCompact.height()];
 
-		for (int x = 0; x < board.width(); x++) {
-			for (int y = 0; y < board.height(); y++) {
-				int countWalls = 0;
-				// TODO - IMPLEMENT CHECKING FOR CORNERS
+		for (int x = 0; x < boardCompact.width(); x++) {
+			for (int y = 0; y < boardCompact.height(); y++) {
+				if (CTile.isWall(boardCompact.tile(x,y))
+						|| MyAgent.goals_location(boardCompact).contains(new Point2D.Double(x,y))) continue;
+
+				boolean leftWall = x == 0 || CTile.isWall(boardCompact.tile(x-1,y));
+				boolean rightWall = x == boardCompact.width() - 1 || CTile.isWall(boardCompact.tile(x+1,y));
+				boolean topWall = y == 0 || CTile.isWall(boardCompact.tile(x,y-1));
+				boolean bottomWall = y == boardCompact.height() - 1 || CTile.isWall(boardCompact.tile(x,y+1));
+
+				if (leftWall && topWall || leftWall && bottomWall) deadSquares[x][y] = true;
+				if (rightWall && topWall || rightWall && bottomWall) deadSquares[x][y] = true;
 			}
 		}
 
+		// TODO - IF SQUARE SURROUNDED BY WALL AND DEAD SQUARE THEN ALSO DEAD SQUARE
+
 		return deadSquares;
+	}
+
+	public static boolean deadBoxes(BoardCompact boardCompact, boolean[][] deadSquares) {
+		for (int x = 0; x < boardCompact.width(); x++) {
+			for (int y = 0; y < boardCompact.height(); y++) {
+				if (deadSquares[x][y] && CTile.isSomeBox(boardCompact.tile(x,y))) return true;
+			}
+		}
+
+		return false;
 	}
 
 }
