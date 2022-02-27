@@ -1,11 +1,15 @@
 import static java.lang.System.out;
 
+import java.awt.*;
+import java.awt.geom.Point2D;
 import java.util.*;
+import java.util.List;
 
 import agents.ArtificialAgent;
 import game.actions.EDirection;
 import game.actions.compact.*;
 import game.board.compact.BoardCompact;
+import game.board.compact.CTile;
 
 /**
  * The simplest Tree-DFS agent.
@@ -123,10 +127,80 @@ public class MyAgent extends ArtificialAgent {
 	}
 
 	private int heuristic(BoardCompact boardCompact) {
-		return 0;
+		int h = 0;
+		ArrayList<Point2D> boxes = boxes_location(boardCompact);
+		ArrayList<Point2D> goals = goals_location(boardCompact);
+
+		for(Point2D box : boxes){
+			h += heuristic_for_this_box(box , goals);
+		}
+
+		return h;
+	}
+	public int manhattan_dist(Point2D box , Point2D goal){
+		return  Math.abs((int)(box.getX() - goal.getX())) + Math.abs((int)(box.getY() - goal.getY()));
+	}
+	public double euclidean_dist(Point2D box, Point2D goal){
+		return Math.sqrt(  ((box.getX() - goal.getX()) * (box.getX() - goal.getX()))
+				+ ((box.getY() - goal.getY()) * (box.getY() - goal.getY())));
 	}
 
+	public int heuristic_for_this_box(Point2D box_co, ArrayList<Point2D> goals){
+
+//		int boxNum = CTile.getBoxNum(board.tiles[(int)box_co.getX()][(int)box_co.getY()]);
+		int dist = Integer.MAX_VALUE;
+		Point2D min = goals.get(0);
+
+		for(Point2D goal : goals){
+			int temp = manhattan_dist(box_co , goal);
+			if (temp < dist) {
+				dist = temp;
+				min = goal;
+			}
+		}
+
+		goals.remove(min);
+		return dist;
+	}
+
+	public ArrayList<Point2D> boxes_location (BoardCompact boardCompact){
+		ArrayList<Point2D> boxes_location = new ArrayList<>();
+		for( int x = 0 ; x < boardCompact.width(); x++){
+			for (int y = 0 ; y < boardCompact.height() ; y++){
+				int tile = boardCompact.tile(x,y);
+				if(CTile.isSomeBox(tile)){
+					//box location
+					Point2D loc = new Point2D.Double(x,y);
+					boxes_location.add(loc);
+				}
+			}
+		}
+		return boxes_location;
+	}
+
+
+	public ArrayList<Point2D> goals_location (BoardCompact boardCompact){
+		ArrayList<Point2D> goals_location = new ArrayList<>();
+		for( int x = 0 ; x < boardCompact.width(); x++){
+			for (int y = 0 ; y < boardCompact.height() ; y++){
+				int tile = boardCompact.tile(x,y);
+				if(CTile.forSomeBox(tile)){
+					//goal location
+					Point2D loc = new Point2D.Double(x,y);
+					goals_location.add(loc);
+				}
+			}
+		}
+		return goals_location;
+	}
+
+
+
+
 }
+
+
+
 
 class Node {
 

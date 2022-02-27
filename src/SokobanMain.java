@@ -80,7 +80,7 @@ public class SokobanMain {
 	public static void main(String[] args) throws Exception {
         String agentId = null;
         String className = null;
-        String levelset = "easy.sok";
+        String levelset = "Aymeric_Medium.sok";
         int level = 0;
         int maxFail = 0;
         boolean optimal = false;
@@ -126,9 +126,11 @@ public class SokobanMain {
 
         if (className == null)
             if (level > 0)
-                Sokoban.playHumanLevel(levelset, level);
+                Sokoban.playAgentLevel(levelset, new MyAgent());
+//                Sokoban.playHumanLevel(levelset, level);
             else
-                Sokoban.playHumanFile(levelset);
+                Sokoban.playAgentLevel(levelset, new MyAgent());
+//                Sokoban.playHumanFile(levelset);
         else
             if (level > 0) {
                 IAgent agent = (IAgent) Class.forName(className).getConstructor().newInstance();
