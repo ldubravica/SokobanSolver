@@ -45,15 +45,14 @@ public class MyAgent extends ArtificialAgent {
 		Map<BoardCompact, CAction> cameFromAction = new HashMap<>();
 		Map<BoardCompact, Integer> costSoFar = new HashMap<>();
 
-		frontier.add(new Node(initialBoard, 0));
+		frontier.add(new Node(initialBoard, (double) 0));
 		cameFromBoard.put(initialBoard, null);
 		cameFromAction.put(initialBoard, null);
 		costSoFar.put(initialBoard, 0);
 
-		int statesExplored = 1;
 		boolean[][] deadSquares = DeadSquareDetector.detect(board);
+//		int statesExplored = 1;
 
-		// find the goal state
 		while (!frontier.isEmpty()) {
 			BoardCompact currentBoard = frontier.poll().boardCompact;
 
@@ -77,34 +76,32 @@ public class MyAgent extends ArtificialAgent {
 				}
 			}
 
-//			// PERFORM THE ACTION
-//			result.add(action.getDirection());
-//			action.perform(board);
-//
-//			// REVERSE ACTION
-//			result.remove(result.size()-1);
-//			action.reverse(board);
+			// LOOP THROUGH POSSIBLE ACTIONS AND ADD FEASIBLE BOARDS
 
 			for (CAction action : actions) {
-				int actionCost = 1;
 				BoardCompact nextBoard = currentBoard.clone();
 				action.perform(nextBoard);
 
-				if (DeadSquareDetector.deadBoxes(currentBoard, deadSquares)) continue;
+				if (DeadSquareDetector.deadBoxes(nextBoard, deadSquares)) continue;
+//				if (!costSoFar.containsKey(nextBoard)) statesExplored++;
 
+				int actionCost = 1;
 				int newCost = costSoFar.get(currentBoard) + actionCost;
-				if (!costSoFar.containsKey(nextBoard)) statesExplored++;
+
 				if (!costSoFar.containsKey(nextBoard) || newCost < costSoFar.get(nextBoard)) {
-					costSoFar.put(nextBoard, newCost);
-					int priority = newCost + heuristic(nextBoard);
+					double priority = newCost + heuristic(nextBoard);
 					frontier.add(new Node(nextBoard, priority));
+
+					costSoFar.put(nextBoard, newCost);
 					cameFromBoard.put(nextBoard, currentBoard);
 					cameFromAction.put(nextBoard, action);
 				}
 			}
 		}
 
-		System.out.println("States explored: " + statesExplored);
+//		System.out.println("States explored: " + statesExplored);
+
+		// ASSEMBLE THE LIST OF ACTIONS
 
 		BoardCompact currentBoard = goalBoard;
 		BoardCompact previousBoard = cameFromBoard.get(currentBoard);
@@ -122,72 +119,62 @@ public class MyAgent extends ArtificialAgent {
 		return false;
 	}
 
-	private int heuristic(BoardCompact boardCompact) {
+	private double heuristic(BoardCompact boardCompact) {
 		int h = 0;
-		ArrayList<Point2D> boxes = boxes_location(boardCompact);
-		ArrayList<Point2D> goals = goals_location(boardCompact);
+		ArrayList<Point2D> boxes = boxesLocation(boardCompact);
+		ArrayList<Point2D> goals = goalsLocation(boardCompact);
 
 		for(Point2D box : boxes){
-			h += heuristic_for_this_box(box , goals);
+			double dist = Integer.MAX_VALUE;
+			Point2D closestGoal = goals.get(0);
+
+			for(Point2D goal : goals){
+				double temp = manhattanDistance(box, goal);
+				if (temp < dist) {
+					dist = temp;
+					closestGoal = goal;
+				}
+			}
+
+			goals.remove(closestGoal);
+			h += dist;
 		}
 
 		return h;
 	}
 
-	public int manhattan_dist(Point2D box , Point2D goal){
-		return  Math.abs((int)(box.getX() - goal.getX())) + Math.abs((int)(box.getY() - goal.getY()));
-	}
-
-	public double euclidean_dist(Point2D box, Point2D goal){
-		return Math.sqrt(((box.getX() - goal.getX()) * (box.getX() - goal.getX()))
-				+ ((box.getY() - goal.getY()) * (box.getY() - goal.getY())));
-	}
-
-	public int heuristic_for_this_box(Point2D box_co, ArrayList<Point2D> goals){
-//		int boxNum = CTile.getBoxNum(board.tiles[(int)box_co.getX()][(int)box_co.getY()]);
-		int dist = Integer.MAX_VALUE;
-		Point2D min = goals.get(0);
-
-		for(Point2D goal : goals){
-			int temp = manhattan_dist(box_co , goal);
-			if (temp < dist) {
-				dist = temp;
-				min = goal;
-			}
-		}
-
-		goals.remove(min);
-		return dist;
-	}
-
-	public static ArrayList<Point2D> boxes_location(BoardCompact boardCompact){
-		ArrayList<Point2D> boxes_location = new ArrayList<>();
-		for( int x = 0 ; x < boardCompact.width(); x++){
-			for (int y = 0 ; y < boardCompact.height() ; y++){
-				int tile = boardCompact.tile(x,y);
-				if(CTile.isSomeBox(tile)){
-					//box location
-					Point2D loc = new Point2D.Double(x,y);
-					boxes_location.add(loc);
+	public static ArrayList<Point2D> boxesLocation(BoardCompact boardCompact) {
+		ArrayList<Point2D> boxesLocation = new ArrayList<>();
+		for (int x = 0; x < boardCompact.width(); x++) {
+			for (int y = 0; y < boardCompact.height(); y++) {
+				// stores the location if it contains a box
+				if (CTile.isSomeBox(boardCompact.tile(x,y))) {
+					boxesLocation.add(new Point2D.Double(x,y));
 				}
 			}
 		}
-		return boxes_location;
+		return boxesLocation;
 	}
 
-	public static ArrayList<Point2D> goals_location(BoardCompact boardCompact){
-		ArrayList<Point2D> goals_location = new ArrayList<>();
-		for( int x = 0 ; x < boardCompact.width(); x++){
-			for (int y = 0 ; y < boardCompact.height() ; y++){
-				int tile = boardCompact.tile(x,y);
-				if(CTile.forSomeBox(tile)){
-					//goal location
-					Point2D loc = new Point2D.Double(x,y);
-					goals_location.add(loc);
+	public static ArrayList<Point2D> goalsLocation(BoardCompact boardCompact) {
+		ArrayList<Point2D> goalsLocation = new ArrayList<>();
+		for (int x = 0; x < boardCompact.width(); x++) {
+			for (int y = 0; y < boardCompact.height(); y++) {
+				// stores the location if it is a goal for some box
+				if (CTile.forSomeBox(boardCompact.tile(x,y))) {
+					goalsLocation.add(new Point2D.Double(x,y));
 				}
 			}
 		}
-		return goals_location;
+		return goalsLocation;
+	}
+
+	public double manhattanDistance(Point2D box, Point2D goal) {
+		return Math.abs((box.getX() - goal.getX())) + Math.abs((box.getY() - goal.getY()));
+	}
+
+	public double euclideanDistance(Point2D box, Point2D goal) {
+		return Math.sqrt(Math.pow(box.getX() - goal.getX(), 2) + Math.pow(box.getY() - goal.getY(), 2));
 	}
 
 }
@@ -196,9 +183,9 @@ public class MyAgent extends ArtificialAgent {
 class Node {
 
 	BoardCompact boardCompact;
-	Integer priority;
+	Double priority;
 
-	Node(BoardCompact boardCompact, Integer priority) {
+	Node(BoardCompact boardCompact, Double priority) {
 		this.boardCompact = boardCompact;
 		this.priority = priority;
 	}
@@ -206,7 +193,7 @@ class Node {
 }
 
 
-class NodeComparator<S> implements Comparator<Node>{
+class NodeComparator<S> implements Comparator<Node> {
 
 	public int compare(Node n1, Node n2) {
 		if (n1.priority > n2.priority)
@@ -215,18 +202,20 @@ class NodeComparator<S> implements Comparator<Node>{
 			return -1;
 		return 0;
 	}
+
 }
 
 
 class DeadSquareDetector {
 
+	// RETURNS BOOLEAN GRID WITH ALL DEAD SQUARES
 	public static boolean[][] detect(BoardCompact boardCompact) {
 		boolean[][] deadSquares = new boolean[boardCompact.width()][boardCompact.height()];
 
 		for (int x = 0; x < boardCompact.width(); x++) {
 			for (int y = 0; y < boardCompact.height(); y++) {
 				if (CTile.isWall(boardCompact.tile(x,y))
-						|| MyAgent.goals_location(boardCompact).contains(new Point2D.Double(x,y))) continue;
+						|| MyAgent.goalsLocation(boardCompact).contains(new Point2D.Double(x,y))) continue;
 
 				boolean leftWall = x == 0 || CTile.isWall(boardCompact.tile(x-1,y));
 				boolean rightWall = x == boardCompact.width() - 1 || CTile.isWall(boardCompact.tile(x+1,y));
@@ -238,18 +227,16 @@ class DeadSquareDetector {
 			}
 		}
 
-		// TODO - IF SQUARE SURROUNDED BY WALL AND DEAD SQUARE THEN ALSO DEAD SQUARE
-
 		return deadSquares;
 	}
 
+	// CHECKS WHETHER THERE ARE BOXES IN THE DEAD SQUARES
 	public static boolean deadBoxes(BoardCompact boardCompact, boolean[][] deadSquares) {
 		for (int x = 0; x < boardCompact.width(); x++) {
 			for (int y = 0; y < boardCompact.height(); y++) {
 				if (deadSquares[x][y] && CTile.isSomeBox(boardCompact.tile(x,y))) return true;
 			}
 		}
-
 		return false;
 	}
 
