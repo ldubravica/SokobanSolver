@@ -2,6 +2,8 @@ import agents.ArtificialAgent;
 import game.actions.EDirection;
 import game.actions.compact.CAction;
 import game.actions.compact.CMove;
+import game.actions.compact.CWalk;
+import game.actions.compact.CWalkPush;
 import game.actions.compact.CPush;
 import game.board.compact.BoardCompact;
 import game.board.compact.CTile;
@@ -209,25 +211,207 @@ class NodeComparator<S> implements Comparator<Node> {
 class DeadSquareDetector {
 
 	// RETURNS BOOLEAN GRID WITH ALL DEAD SQUARES
-	public static boolean[][] detect(BoardCompact boardCompact) {
-		boolean[][] deadSquares = new boolean[boardCompact.width()][boardCompact.height()];
+	public static boolean[][] detect_de(BoardCompact board) {
 
-		for (int x = 0; x < boardCompact.width(); x++) {
-			for (int y = 0; y < boardCompact.height(); y++) {
-				if (CTile.isWall(boardCompact.tile(x,y))
-						|| MyAgent.goalsLocation(boardCompact).contains(new Point2D.Double(x,y))) continue;
+		ArrayList<Point2D> goals = MyAgent.goalsLocation(board);
+		boolean[][] deadstates = new boolean[board.width()][board.height()];
+		//setting all the tiles to be dead initially
+		for(boolean[] row: deadstates){
+			Arrays.fill(row,true);
+		}
 
-				boolean leftWall = x == 0 || CTile.isWall(boardCompact.tile(x-1,y));
-				boolean rightWall = x == boardCompact.width() - 1 || CTile.isWall(boardCompact.tile(x+1,y));
-				boolean topWall = y == 0 || CTile.isWall(boardCompact.tile(x,y-1));
-				boolean bottomWall = y == boardCompact.height() - 1 || CTile.isWall(boardCompact.tile(x,y+1));
+		for (Point2D goal : goals) {
+			//see if you can get to the player from each goal.
+			List<Point2D> tiles = new ArrayList<>();
+			BoardCompact cloneBoard = board.clone();
+			int playerx  = cloneBoard.playerX;
+			int playery = cloneBoard.playerY;
 
-				if (leftWall && topWall || leftWall && bottomWall) deadSquares[x][y] = true;
-				if (rightWall && topWall || rightWall && bottomWall) deadSquares[x][y] = true;
+
+			//get a box, move it to the goal.
+			Point2D randomBox = MyAgent.boxesLocation(cloneBoard).get(0);
+			cloneBoard.moveBox( (int) randomBox.getX() ,(int) randomBox.getY() ,(int) goal.getX(),(int) goal.getY());
+			CWalk walk = null;
+			if(CTile.isFree(cloneBoard.tiles[(int) randomBox.getX() - 1][(int) randomBox.getY()])){
+				walk =  new CWalk((int)goal.getX() -1,(int)goal.getY());
+			}
+			else if(CTile.isFree(cloneBoard.tiles[(int) randomBox.getX() ][(int) randomBox.getY()] - 1)){
+				walk =  new CWalk((int)goal.getX(),(int)goal.getY() - 1);
+			}
+			else if(CTile.isFree(cloneBoard.tiles[(int) randomBox.getX() +1][(int) randomBox.getY()])){
+				walk =  new CWalk((int)goal.getX() + 1,(int)goal.getY());
+			}
+			else if(CTile.isFree(cloneBoard.tiles[(int) randomBox.getX() ][(int) randomBox.getY()] + 1) ){
+				walk =  new CWalk((int)goal.getX(),(int)goal.getY() + 1);
+			}
+			else {//?
+			}
+
+			if(!walk.isPossible(cloneBoard)) return null;
+			walk.perform(cloneBoard);
+
+			detect_dfs(6,tiles,cloneBoard,playerx,playery,deadstates);
+		}
+
+		return deadstates;
+	}
+
+
+	public static void detect_dfs(int level , List<Point2D> tiles , BoardCompact board , int playerx,int playery
+			,boolean[][] deadStates){
+		if (level <= 0) return; // DEPTH-LIMITED
+		List<CAction> actions = new ArrayList<CAction>(4);
+
+		// COLLECT POSSIBLE ACTIONS
+
+		for (CMove move : CMove.getActions()) {
+			if (move.isPossible(board)) {
+				actions.add(move);
+			}
+		}
+		for (CPush push : CPush.getActions()) {
+			if (push.isPossible(board)) {
+				actions.add(push);
 			}
 		}
 
-		return deadSquares;
+		for(CAction action : actions){
+			action.perform(board);
+			//current location of our agent on the tiles. we add it to the path.
+			tiles.add(new Point2D.Double(board.playerX,board.playerY));
+
+			if(board.playerX == playerx  && board.playerY == playery){
+				//we gucci, all the tiles leading up to this were alive.
+				for(Point2D p : tiles){
+					deadStates[(int)p.getX()][(int)p.getY()] = false;
+				}
+			}
+			detect_dfs(level - 1, tiles , board , playerx , playery, deadStates);
+			action.reverse(board);
+		}
+		//we aint gucci
+		return;
+	}
+
+
+	public static boolean[][] detect(BoardCompact board){
+		ArrayList<Point2D> goals = MyAgent.goalsLocation(board);
+		boolean[][] deadstates = new boolean[board.width()][board.height()];
+		//setting all the tiles to be dead initially
+		for(boolean[] row: deadstates){
+			Arrays.fill(row,true);
+		}
+
+		for (Point2D goal : goals){
+			deadstates[(int)goal.getX()][(int)goal.getY()] = false;
+		}
+
+
+		for (Point2D goal : goals) {
+			ArrayList<Point2D> visited = new ArrayList<>();
+			dfs(board,(int)goal.getX() ,(int)goal.getY(), deadstates, visited,EDirection.NONE);
+//            dfs(board,(int)goal.getX() -1,(int)goal.getY(),deadstates, visited,EDirection.LEFT);
+//            dfs(board,(int)goal.getX(),(int)goal.getY() -1,deadstates, visited,EDirection.UP);
+//            dfs(board,(int)goal.getX()+1,(int)goal.getY(),deadstates, visited,EDirection.RIGHT);
+//            dfs(board,(int)goal.getX(),(int)goal.getY() + 1,deadstates, visited,EDirection.DOWN);
+		}
+		return deadstates;
+	}
+
+
+	public static void dfs(BoardCompact board , int x, int y, boolean[][] deadstates,ArrayList<Point2D> visited
+			, EDirection dir){
+
+		if(CTile.isWall(board.tile(x,y))){
+			return;
+		}
+		Point2D cur = new Point2D.Double(x,y);
+		if( visited.contains(cur)){
+			return;
+		}
+
+		if (dir.index == -1 ){
+			//first time.
+		}
+		if(dir.index == 0){//up
+			if(CTile.isFree(board.tile(x,y-1)))  {
+				deadstates[x][y] = false;
+			}
+		}
+		if(dir.index == 1){//right
+			if(CTile.isFree(board.tile(x+1,y))) {
+				deadstates[x][y] = false;
+			}
+		}
+		if(dir.index == 2){//down
+			if(CTile.isFree(board.tile(x,y+1))) {
+				deadstates[x][y] = false;
+			}
+		}
+		if(dir.index == 3){//left
+			if(CTile.isFree(board.tile(x-1,y))) {
+				deadstates[x][y] = false;
+			}
+		}
+
+//
+//		System.out.println("dead squares: ");
+//		for (int z = 0 ; z < board.height() ; ++z) {
+//			for (int a = 0 ; a < board.width() ; ++a)
+//				System.out.print(CTile.isWall(board.tile(a, z)) ? '#' : (deadstates[a][z] ? 'X' : '_'));
+//			System.out.println();
+//		}
+
+		visited.add(cur);
+		//visited and the one next to it
+		if(!deadstates[x][y]) {
+			dfs(board, x, y - 1, deadstates, visited, EDirection.UP);
+			dfs(board, x + 1, y, deadstates, visited, EDirection.RIGHT);
+			dfs(board, x, y + 1, deadstates, visited, EDirection.DOWN);
+			dfs(board, x - 1, y, deadstates, visited, EDirection.LEFT);
+		}
+		else return;
+
+
+	}
+
+	public static boolean[][] detectCorners(BoardCompact board) {
+		boolean[][] b = new boolean[board.width()][board.height()];
+
+		ArrayList<Point2D> allBoxes = MyAgent.boxesLocation(board);
+		ArrayList<Point2D> allGoals = MyAgent.goalsLocation(board);
+		int[][] t = board.tiles;
+		for (int row = 0; row < board.width(); row++) {
+			for (int col = 0; col < board.height(); col++) {
+				//If this tile is walkable and not a goal tile
+				if (CTile.isWalkable(board.tiles[row][col]) && !CTile.forSomeBox(board.tiles[row][col])) {
+					//corner states. Shouldnt be out of bound since we're only traversing on walkable tiles which are
+					//surrounded by walls in minimum.
+					//top and left
+					if (CTile.isWall(t[row - 1][col]) && CTile.isWall(t[row][col - 1])) {
+						b[row][col] = true; //Is a dead state, corner state
+					}
+					//top and right
+					else if (CTile.isWall(t[row + 1][col]) && CTile.isWall(t[row][col - 1])) {
+						b[row][col] = true; //Is a dead state, corner state
+					}
+					//bottom and left
+					else if (CTile.isWall(t[row - 1][col]) && CTile.isWall(t[row][col + 1])) {
+						b[row][col] = true; //Is a dead state, corner state
+					}
+					//bottom and right
+					else if (CTile.isWall(t[row + 1][col]) && CTile.isWall(t[row][col + 1])) {
+						b[row][col] = true; //Is a dead state, corner state
+					}
+
+					//if not corner (and other to-be-added)
+					else b[row][col] = false; //not a dead state.
+				}
+			}
+		}
+		System.out.println(board.toString());
+		System.out.println(Arrays.deepToString(b));
+		return b;
 	}
 
 	// CHECKS WHETHER THERE ARE BOXES IN THE DEAD SQUARES
